@@ -33,7 +33,8 @@ import AdminPermissions from "./pages/admin/AdminPermissions";
 import AdminKitBuilder from "./pages/admin/AdminKitBuilder";
 import NotFound from "./pages/NotFound";
 import AdminCoupons from "./pages/admin/AdminCoupons";
-import AdminStaff from "./pages/admin/AdminStaff"; // <-- Import Sahi hai
+import AdminStaff from "./pages/admin/AdminStaff"; 
+import TechnicianDashboard from "./pages/TechnicianDashboard";
 
 const queryClient = new QueryClient();
 
@@ -61,6 +62,7 @@ const App = () => (
                 <Route path="/warranty" element={<Warranty />} />
                 <Route path="/kit-builder" element={<KitBuilder />} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                <Route path="/technician" element={<ProtectedRoute><TechnicianDashboard /></ProtectedRoute>} />
                 
                 {/* --- SECURE ADMIN ROUTES --- */}
                 <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminLayout /></ProtectedRoute>}>

@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Package, MapPin, Calendar, RefreshCw, Clock, Truck, Wrench, CheckCircle, FileText } from "lucide-react";
+import { Package, MapPin, Calendar, RefreshCw, Clock, Truck, Wrench, CheckCircle, FileText, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 interface OrderHistoryProps {
   userId: string;
@@ -25,13 +26,12 @@ const PAYMENT_CONFIG: Record<string, { color: string }> = {
   refunded: { color: "bg-secondary/10 text-secondary" },
 };
 
-// 🚀 SMART PARSER: Number errors aur commas ko theek karne ke liye
 const parseItemsRobust = (itemsData: any) => {
   if (!itemsData) return [];
   try {
     const arr = typeof itemsData === "string" ? JSON.parse(itemsData) : itemsData;
     if (!Array.isArray(arr)) return [];
-    return arr.map(item => {
+    return arr.map((item: any) => {
       if (typeof item === 'string') {
         const parts = item.split('-');
         const priceStr = parts[1] || "0";
@@ -49,6 +49,8 @@ const parseItemsRobust = (itemsData: any) => {
         name: item.name || "Item",
         price: Number(String(item.price || "0").replace(/[^0-9.-]+/g, "")) || 0,
         qty: Number(item.qty) || Number(item.quantity) || 1,
+        serial_number: item.serial_number || "", 
+        warranty_months: item.warranty_months || "",
         image_url: item.image_url,
         brand: item.brand,
         category: item.category,
@@ -95,6 +97,7 @@ export const OrderHistory = ({ userId }: OrderHistoryProps) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
+  const navigate = useNavigate(); 
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -136,6 +139,7 @@ export const OrderHistory = ({ userId }: OrderHistoryProps) => {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
+  // 🚀 FIX 1: Reorder ab user ko seedha Cart par bhej dega
   const handleReorder = (order: any) => {
     const items = parseItemsRobust(order.items);
     if (items.length === 0) { toast.error("No items to reorder"); return; }
@@ -146,154 +150,169 @@ export const OrderHistory = ({ userId }: OrderHistoryProps) => {
       }, item.qty);
     });
     toast.success(`${items.length} item(s) added back to cart!`);
+    navigate('/cart'); // <-- User flow smooth kar diya
   };
 
-  // 🚀 NEW PROFESSIONAL PDF FOR CUSTOMERS
+  // 🚀 FIX 2: Hidden iFrame for Invoice (Bypasses Popup Blockers)
   const downloadInvoice = (order: any) => {
-    toast.loading("Generating PDF...", { id: "pdf-toast" });
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error("Popup blocked! Please allow popups to download PDF.");
-      return;
-    }
+    toast.loading("Generating Tax Invoice...", { id: "pdf-toast" });
+
+    const grandTotal = Number(order.total_amount) || 0;
+    const baseAmount = grandTotal / 1.18;
+    const totalGst = grandTotal - baseAmount;
+    const cgst = totalGst / 2;
+    const sgst = totalGst / 2;
 
     const items = parseItemsRobust(order.items);
     const itemsHtml = items.length > 0 
       ? items.map((item: any) => `
-        <tr class="border-b border-gray-100 text-gray-600 text-sm">
-          <td class="py-4 px-2 text-gray-800">${item.name}</td>
+        <tr class="border-b border-gray-100 text-gray-700 text-sm">
+          <td class="py-4 px-2">
+            <p class="font-bold text-gray-900">${item.name}</p>
+            ${item.serial_number ? `<p class="text-[10px] font-mono text-gray-500 mt-1">S/N: ${item.serial_number}</p>` : ''}
+          </td>
+          <td class="py-4 px-2 text-center text-xs text-gray-500">${item.warranty_months ? `${item.warranty_months}M` : 'N/A'}</td>
           <td class="py-4 px-2 text-center">₹${item.price.toLocaleString("en-IN")}</td>
-          <td class="py-4 px-2 text-center">${item.qty}</td>
-          <td class="py-4 px-2 text-right text-gray-800 font-medium">₹${(item.price * item.qty).toLocaleString("en-IN")}</td>
+          <td class="py-4 px-2 text-center font-bold">${item.qty}</td>
+          <td class="py-4 px-2 text-right text-gray-900 font-bold">₹${(item.price * item.qty).toLocaleString("en-IN")}</td>
         </tr>
       `).join('')
-      : `<tr><td colspan="4" class="py-4 px-2 text-gray-500 italic text-center border-b border-gray-100">Manual Entry / No specific items</td></tr>`;
+      : `<tr><td colspan="5" class="py-4 px-2 text-gray-500 italic text-center border-b border-gray-100">Details unavailable</td></tr>`;
 
     const html = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <title>Invoice_${order.id.slice(0, 8).toUpperCase()}</title>
+      <title>Tax_Invoice_${order.id.slice(0, 8).toUpperCase()}</title>
       <script src="https://cdn.tailwindcss.com"></script>
       <style>
         @media print {
           @page { size: A4; margin: 0; }
-          body { 
-            -webkit-print-color-adjust: exact !important; 
-            print-color-adjust: exact !important; 
-            background-color: white !important; 
-            margin: 0; padding: 20mm;
-          }
+          body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: white !important; margin: 0; padding: 20mm; }
         }
         body { font-family: system-ui, -apple-system, sans-serif; background: white; color: black; }
       </style>
     </head>
     <body class="p-8 max-w-4xl mx-auto">
-      
-      <div class="flex justify-between items-start">
+      <div class="flex justify-between items-start border-b-2 border-orange-500 pb-6 mb-8">
         <div>
-          <h1 class="text-3xl font-black text-indigo-600 tracking-tight uppercase">Drishti</h1>
-          <h2 class="text-sm font-bold text-gray-600 tracking-widest uppercase mt-1">Security Systems</h2>
-        </div>
-        <div class="text-right text-gray-500 text-sm space-y-1">
-          <p>Tagore Hostel, Geeta University</p>
-          <p>Panipat, Haryana - 132145</p>
-          <p>+91 98765 43210</p>
-          <p class="text-indigo-600">drishtisecurity.com</p>
-        </div>
-      </div>
-
-      <div class="mt-16 flex justify-between items-end">
-        <div class="grid grid-cols-2 gap-8 w-2/3">
-          <div>
-            <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider mb-2">Billed To:</h3>
-            <p class="font-bold text-gray-800 text-lg">${order.customer_name}</p>
-            <p class="text-gray-500 text-sm mt-1">${order.phone || "No phone provided"}</p>
-            <p class="text-gray-500 text-sm mt-1 max-w-[200px] leading-relaxed">${parseAddress(order.delivery_address)}</p>
-          </div>
-          <div>
-            <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider mb-2">Date of Issue:</h3>
-            <p class="text-gray-800 font-medium mb-5">${new Date(order.created_at).toLocaleDateString("en-IN", { day: '2-digit', month: 'long', year: 'numeric' })}</p>
-            
-            <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider mb-2">Invoice Number:</h3>
-            <p class="text-gray-800 font-medium tracking-widest">${order.id.slice(0, 8).toUpperCase()}</p>
+          <h1 class="text-4xl font-black text-orange-600 tracking-tighter uppercase italic">Drishti</h1>
+          <h2 class="text-sm font-black text-gray-800 tracking-widest uppercase mt-1">Security System</h2>
+          <div class="mt-4 text-xs font-medium text-gray-500 space-y-1">
+             <p>Panipat, Haryana, India</p>
+             <p>Phone: +91 8787225596</p>
+             <p class="font-bold text-gray-800 pt-1">GSTIN: 06DRISH715E1Z5</p>
           </div>
         </div>
         <div class="text-right">
-          <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider mb-2">Amount Due (INR):</h3>
-          <p class="text-4xl font-light text-indigo-600">₹${order.payment_status === 'paid' ? '0' : Number(order.total_amount).toLocaleString("en-IN")}</p>
+          <h3 class="text-3xl font-black text-gray-200 uppercase tracking-widest">Tax Invoice</h3>
+          <p class="text-sm font-bold text-gray-800 mt-2">INV-${order.id.slice(0, 8).toUpperCase()}</p>
+          <p class="text-xs font-semibold text-gray-500 mt-1">Date: ${new Date(order.created_at).toLocaleDateString("en-IN", { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+          <div class="mt-4 inline-block px-3 py-1 bg-gray-100 rounded text-xs font-black text-gray-600 uppercase">
+             Status: ${order.payment_status === 'paid' ? 'PAID / COMPLETED' : 'PAYMENT PENDING'}
+          </div>
         </div>
       </div>
 
-      <div class="mt-12">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b-2 border-indigo-600 text-indigo-600">
-              <th class="py-3 px-2 font-bold text-sm">Description</th>
-              <th class="py-3 px-2 font-bold text-sm text-center">Rate</th>
-              <th class="py-3 px-2 font-bold text-sm text-center">Qty</th>
-              <th class="py-3 px-2 font-bold text-sm text-right">Line Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mt-8 flex justify-between items-start">
-        <div class="w-1/2 pr-8">
-          <h3 class="text-gray-400 font-semibold text-xs uppercase tracking-wider mb-3">Notes</h3>
-          <p class="text-gray-500 text-sm mb-1">Payment Method: <span class="font-bold text-gray-800">${getPaymentModeText(order)}</span></p>
-          <p class="text-gray-500 text-sm mb-1">Installation: <span class="font-bold text-gray-800">${order.install_status.replace('_', ' ').toUpperCase()}</span></p>
-          <p class="text-gray-400 text-xs mt-6 leading-relaxed">Thank you for choosing Drishti Security Systems. This is a computer-generated invoice and does not require a physical signature.</p>
+      <div class="grid grid-cols-2 gap-8 mb-8">
+        <div>
+          <h3 class="text-gray-400 font-black text-[10px] uppercase tracking-widest mb-2">Billed To:</h3>
+          <p class="font-black text-gray-800 text-lg">${order.customer_name}</p>
+          <p class="text-gray-600 text-sm mt-1 font-medium">${order.phone || "No phone provided"}</p>
+          <p class="text-gray-500 text-xs mt-1 leading-relaxed max-w-[250px]">${parseAddress(order.delivery_address)}</p>
         </div>
-        <div class="w-1/2 flex justify-end">
-          <table class="w-64 text-sm">
-            <tbody>
-              <tr>
-                <td class="py-2 text-gray-500">Subtotal</td>
-                <td class="py-2 text-right text-gray-800 font-medium">₹${Number(order.total_amount).toLocaleString("en-IN")}</td>
-              </tr>
-              <tr>
-                <td class="py-2 text-gray-500 border-b border-gray-200">Tax (0%)</td>
-                <td class="py-2 text-right text-gray-800 font-medium border-b border-gray-200">₹0</td>
-              </tr>
-              <tr>
-                <td class="py-4 text-gray-800 font-bold text-xl">Total</td>
-                <td class="py-4 text-right text-gray-800 font-bold text-xl">₹${Number(order.total_amount).toLocaleString("en-IN")}</td>
-              </tr>
-              <tr>
-                <td class="py-3 text-gray-800 font-bold text-lg border-t-2 border-indigo-600">Amount Due</td>
-                <td class="py-3 text-right text-indigo-600 font-bold text-xl border-t-2 border-indigo-600">₹${order.payment_status === 'paid' ? '0' : Number(order.total_amount).toLocaleString("en-IN")}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="text-right">
+          <h3 class="text-gray-400 font-black text-[10px] uppercase tracking-widest mb-2">Installation & Payment:</h3>
+          <p class="text-sm font-bold text-gray-800 uppercase">${order.installation_type === 'technician' ? 'Drishti Expert Team' : 'Customer Self Install'}</p>
+          <p class="text-sm font-bold text-gray-800 uppercase mt-1">${getPaymentModeText(order)}</p>
         </div>
       </div>
 
+      <table class="w-full text-left mb-8 border-collapse">
+        <thead>
+          <tr class="bg-gray-100 text-gray-800 text-[10px] uppercase font-black tracking-widest">
+            <th class="py-3 px-4 rounded-l-lg">Description & S/N</th>
+            <th class="py-3 px-4 text-center">Warranty</th>
+            <th class="py-3 px-4 text-center">Rate</th>
+            <th class="py-3 px-4 text-center">Qty</th>
+            <th class="py-3 px-4 text-right rounded-r-lg">Total</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          ${itemsHtml}
+        </tbody>
+      </table>
+
+      <div class="flex justify-end border-t-2 border-gray-800 pt-6 mb-12">
+        <div class="w-72 space-y-3">
+          <div class="flex justify-between text-sm font-bold text-gray-600">
+            <span>Taxable Value:</span>
+            <span>₹${baseAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div class="flex justify-between text-sm font-bold text-gray-600">
+            <span>CGST @ 9%:</span>
+            <span>₹${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div class="flex justify-between text-sm font-bold text-gray-600">
+            <span>SGST @ 9%:</span>
+            <span>₹${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div class="flex justify-between text-xl font-black text-orange-600 pt-4 border-t border-gray-200 mt-2">
+            <span>Grand Total:</span>
+            <span>₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="text-[10px] font-medium text-gray-400 leading-relaxed border-t border-gray-100 pt-6">
+        <p class="font-bold text-gray-600 mb-1">Terms & Conditions:</p>
+        <p>1. Warranty is strictly applicable against manufacturing defects only. Physical damage is not covered.</p>
+        <p>2. Please retain this tax invoice and product serial numbers for any warranty claims. Verify warranty 24/7 on our website.</p>
+      </div>
     </body>
     </html>`;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-
-    setTimeout(() => {
-      toast.success("PDF Ready!", { id: "pdf-toast" });
-      printWindow.print();
-    }, 1000);
+    // Hidden iframe trick
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    
+    const iframeDoc = iframe.contentWindow?.document;
+    if (iframeDoc) {
+      iframeDoc.write(html);
+      iframeDoc.close();
+      
+      iframe.onload = () => {
+        setTimeout(() => {
+          toast.success("Tax Invoice Ready!", { id: "pdf-toast" });
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          
+          // Cleanup iframe after print dialog
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 2000);
+        }, 500); 
+      };
+    } else {
+       toast.error("Failed to generate PDF.", { id: "pdf-toast" });
+    }
   };
 
-  if (loading) {
-    return <div className="text-center py-8"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" /></div>;
-  }
+  if (loading) return <div className="text-center py-8"><div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" /></div>;
 
   if (orders.length === 0) {
     return (
-      <div className="glass-card p-8 text-center">
-        <Package className="w-12 h-12 mx-auto text-muted-foreground/20 mb-3" />
-        <p className="text-muted-foreground">No orders yet</p>
+      <div className="glass-card p-8 text-center border-2 border-dashed border-border/40">
+        <Package className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
+        <h3 className="text-lg font-bold">No orders yet</h3>
+        <p className="text-sm text-muted-foreground mb-6 mt-1">Looks like you haven't secured your space yet.</p>
+        <Button onClick={() => navigate('/store')} className="bg-primary text-white hover:bg-primary/90 rounded-full px-8">
+          Explore Security Kits
+        </Button>
       </div>
     );
   }
@@ -328,16 +347,20 @@ export const OrderHistory = ({ userId }: OrderHistoryProps) => {
             <span className="leading-relaxed">{parseAddress(order.delivery_address)}</span>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-2 pt-1">
-            <Button variant="outline" size="sm" className={`text-xs flex-1 ${order.payment_status === 'paid' && order.install_status === 'completed' ? 'border-border/50' : 'w-full'}`} onClick={() => handleReorder(order)}>
+            <Button variant="outline" size="sm" className={`text-xs flex-1 border-border/50`} onClick={() => handleReorder(order)}>
               <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reorder
             </Button>
             
-            {/* INVOICE BUTTON: Only shows when Paid & Completed */}
             {order.payment_status === 'paid' && order.install_status === 'completed' && (
               <Button size="sm" className="text-xs flex-1 bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20 shadow-none transition-colors" onClick={() => downloadInvoice(order)}>
-                <FileText className="w-3.5 h-3.5 mr-1.5" /> Download Invoice
+                <FileText className="w-3.5 h-3.5 mr-1.5" /> Tax Invoice
+              </Button>
+            )}
+
+            {order.install_status === 'completed' && (
+              <Button size="sm" className="text-xs flex-1 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-500/20 shadow-none transition-colors" onClick={() => navigate('/warranty')}>
+                <ShieldCheck className="w-3.5 h-3.5 mr-1.5" /> Warranty
               </Button>
             )}
           </div>
@@ -347,7 +370,6 @@ export const OrderHistory = ({ userId }: OrderHistoryProps) => {
   );
 };
 
-// Syncing steps with Admin panel
 const STEPS = ["pending", "scheduled", "in_progress", "completed"];
 
 const OrderProgressBar = ({ status }: { status: string }) => {
