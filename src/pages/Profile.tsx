@@ -262,7 +262,7 @@ const Profile = () => {
                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Registered Phone</Label>
                     <div className="relative">
                       <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/50" />
-                      <Input placeholder="e.g. 98120XXXXX" value={phone} onChange={e => setPhone(e.target.value)} className="pl-11 h-12 bg-muted/20 border-border/50 rounded-xl focus-visible:ring-primary/30" />
+                      <Input placeholder="e.g. 98171XXXXX" value={phone} onChange={e => setPhone(e.target.value)} className="pl-11 h-12 bg-muted/20 border-border/50 rounded-xl focus-visible:ring-primary/30" />
                     </div>
                   </div>
                 </div>
