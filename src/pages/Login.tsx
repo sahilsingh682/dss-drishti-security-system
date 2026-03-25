@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 const Login = () => {
   const navigate = useNavigate();
   
-  // 🚀 Consolidated View State (Removed 'admin' view)
+  // 🚀 Consolidated View State
   const [view, setView] = useState<'login' | 'signup' | 'forgot' | 'otp' | 'new-password'>('login');
   const [otpType, setOtpType] = useState<'signup' | 'recovery'>('signup');
 
@@ -49,15 +49,14 @@ const Login = () => {
   const strengthColors = ['bg-red-500', 'bg-red-400', 'bg-amber-500', 'bg-emerald-400', 'bg-emerald-600'];
   const strengthText = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
 
-  // --- 🛡️ SMART AUTH ACTIONS (Role-Based Routing) ---
+  // --- 🛡️ SMART AUTH ACTIONS ---
 
-  // 🚀 THE FIX: Direct Supabase Google Auth (Lovable Bypass)
+  // 🚀 FIXED: DIRECT SUPABASE GOOGLE AUTH (Bypasses Lovable Proxy for Vercel)
   const handleGoogleSignIn = async () => {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // Automatically redirects to the current URL (Vercel or Localhost)
         redirectTo: `${window.location.origin}/`,
       }
     });
@@ -191,7 +190,7 @@ const Login = () => {
 
       <div className="w-full max-w-md relative z-10">
         
-        {/* Header Logo (Cleaned from secret clicks) */}
+        {/* Header Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex p-4 rounded-2xl bg-slate-800/50 border border-white/5 shadow-xl mb-4">
             <Shield className="w-8 h-8 text-primary" />
