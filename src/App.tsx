@@ -38,6 +38,10 @@ import AdminStaff from "./pages/admin/AdminStaff";
 import TechnicianDashboard from "./pages/TechnicianDashboard";
 import TrackOrder from "./pages/TrackOrder";
 
+// 👇 VERCEL ANALYTICS IMPORTS ADDED HERE
+import { SpeedInsights } from "@vercel/speed-insights/react";
+import { Analytics } from "@vercel/analytics/react";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -52,6 +56,11 @@ const App = () => (
               <CustomCursor />
               <Navbar />
               <ScrollToTop />
+              
+              {/* 👇 VERCEL COMPONENTS ADDED HERE */}
+              <SpeedInsights />
+              <Analytics />
+
               <Routes>
                 {/* --- PUBLIC & USER ROUTES --- */}
                 <Route path="/" element={<Index />} />
